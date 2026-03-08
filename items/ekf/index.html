@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E05: Extended Kalman Filter — SE Zoo</title>
+    <meta name="description" content="EKF for a 2-link robot arm with Jacobian linearization. Interactive nonlinear state estimation.">
+    <style>
+        :root{--bg-primary:#0d1117;--bg-secondary:#161b22;--bg-card:#1c2128;--bg-card-hover:#272d36;--bg-input:#21262d;--text-primary:#e6edf3;--text-secondary:#8b949e;--text-muted:#6e7681;--text-link:#58a6ff;--border-default:#30363d;--border-muted:#21262d;--radius-sm:6px;--radius-md:10px;--transition:.2s ease;--accent:#db6d28}
+        :root[data-theme="light"]{--bg-primary:#ffffff;--bg-secondary:#f6f8fa;--bg-card:#ffffff;--bg-card-hover:#f3f4f6;--bg-input:#f6f8fa;--text-primary:#1f2328;--text-secondary:#656d76;--text-muted:#8b949e;--text-link:#0969da;--border-default:#d0d7de;--border-muted:#d8dee4}
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;color:var(--text-primary);background:var(--bg-primary);-webkit-font-smoothing:antialiased;line-height:1.6}
+    </style>
+    <link rel="stylesheet" href="../../css/item.css">
+    <link rel="stylesheet" href="../../css/animation.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <div class="item-page">
+        <nav class="item-nav">
+            <a href="https://malphons.github.io/app_se_zoo/" class="item-nav__back">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back to SE Zoo</a>
+            <button class="item-nav__theme-toggle" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+        </nav>
+
+        <section class="item-hero">
+            <h1 class="item-hero__title">Extended Kalman Filter</h1>
+            <div class="item-hero__meta">
+                <span class="item-hero__module-id">E05</span>
+                <span class="item-hero__badge" style="background:#f0883e;color:#fff">Optimal Filtering</span>
+                <span class="item-hero__badge" style="background:rgba(219,109,40,.15);color:#db6d28">Nonlinear Kalman</span>
+                <span class="item-hero__badge" style="background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-default)">2-Link Arm</span>
+                <span class="item-hero__year">Est. 1960</span>
+            </div>
+            <p class="item-hero__desc">
+                Real robots are nonlinear. The EKF handles this through local linearization
+                via Jacobians evaluated at the current state estimate.
+            </p>
+        </section>
+
+        <div class="item-prereqs">
+            <span class="item-prereqs__label">Prerequisite:</span>
+            <a href="https://malphons.github.io/se-zoo-opt-linear-filter/items/kalman-filter/" class="item-related__link" style="padding:3px 10px;font-size:.75rem">E04: Kalman Filter</a>
+        </div>
+
+        <div class="item-viz">
+            <div class="item-viz__split">
+                <div class="item-robot" id="robot-container">
+                    <span class="item-robot__label">Robot View</span>
+                </div>
+                <div class="item-diagram">
+                    <div class="item-diagram__controls">
+                        <button class="item-diagram__btn item-diagram__btn--active" id="btn-joints">Joint Angles</button>
+                        <button class="item-diagram__btn" id="btn-error">Error</button>
+                        <button class="item-diagram__btn" id="btn-cov">Covariance</button>
+                        <button class="item-diagram__btn" id="btn-regenerate">Regenerate</button>
+                    </div>
+                    <div id="diagram-container"></div>
+                </div>
+            </div>
+            <div class="item-transport">
+                <button class="item-transport__btn" id="btn-step-back" aria-label="Step back">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="3" height="16"/><polygon points="20,4 8,12 20,20"/></svg>
+                </button>
+                <button class="item-transport__btn item-transport__btn--play" id="btn-play" aria-label="Play">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>
+                </button>
+                <button class="item-transport__btn" id="btn-step-fwd" aria-label="Step forward">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="4,4 16,12 4,20"/><rect x="17" y="4" width="3" height="16"/></svg>
+                </button>
+                <input type="range" class="item-transport__scrubber" id="scrubber" min="0" max="250" value="0">
+                <span class="item-transport__frame" id="frame-display">0 / 250</span>
+                <select class="item-transport__speed" id="speed-select">
+                    <option value="0.5">0.5x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="2">2x</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="item-sliders">
+            <div class="item-slider" id="slider-Q">
+                <span class="item-slider__label">Process Q:</span>
+                <input type="range" class="item-slider__input" min="0.001" max="0.1" step="0.001" value="0.005">
+                <span class="item-slider__value">0.005</span>
+            </div>
+            <div class="item-slider" id="slider-R">
+                <span class="item-slider__label">Meas. R:</span>
+                <input type="range" class="item-slider__input" min="0.01" max="0.5" step="0.01" value="0.05">
+                <span class="item-slider__value">0.05</span>
+            </div>
+        </div>
+        <div class="item-stats" id="diagram-stats"></div>
+
+        <div class="item-tabs">
+            <button class="item-tab-btn item-tab-btn--active" data-tab="overview">Overview</button>
+            <button class="item-tab-btn" data-tab="howto">How It Works</button>
+            <button class="item-tab-btn" data-tab="math">Math</button>
+            <button class="item-tab-btn" data-tab="code">Code</button>
+            <button class="item-tab-btn" data-tab="references">References</button>
+        </div>
+
+        <div class="item-tab-content item-tab-content--active" id="tab-overview">
+            <div class="item-section">
+                <h2>Overview</h2>
+                <p>The standard Kalman filter assumes linear dynamics $\mathbf{x}_{k+1}=\mathbf{A}\mathbf{x}_k$. Real robot dynamics are nonlinear: $\mathbf{x}_{k+1}=f(\mathbf{x}_k)$. The EKF linearizes $f$ around the current estimate using the Jacobian $\mathbf{F}_k = \partial f/\partial \mathbf{x}\big|_{\hat{\mathbf{x}}_k}$, then runs a standard Kalman filter with this time-varying linearization.</p>
+                <div class="item-insight">
+                    <div class="item-insight__label">Key Insight</div>
+                    <p style="color:var(--text-secondary);margin:0">The EKF is only a first-order approximation. It can <strong>diverge</strong> when nonlinearity is strong and the estimate drifts far from truth, because the linearization becomes invalid. This motivates the particle filter (E09) for highly nonlinear problems.</p>
+                </div>
+                <h3>Key Properties</h3>
+                <ul>
+                    <li><strong>Local linearization</strong> &mdash; Jacobian computed at each step</li>
+                    <li><strong>Not globally optimal</strong> &mdash; Only locally optimal near the true state</li>
+                    <li><strong>Can diverge</strong> &mdash; If nonlinearity is too strong for the linearization</li>
+                    <li><strong>Computationally efficient</strong> &mdash; Same cost as linear KF per step</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="item-tab-content" id="tab-howto">
+            <div class="item-section">
+                <h2>How It Works</h2>
+                <ol style="color:var(--text-secondary);padding-left:20px;margin-bottom:16px">
+                    <li style="margin-bottom:8px"><strong>Predict state:</strong> $\hat{\mathbf{x}}^{-} = f(\hat{\mathbf{x}}^{+})$ &mdash; Propagate through the <em>nonlinear</em> model</li>
+                    <li style="margin-bottom:8px"><strong>Compute Jacobian:</strong> $\mathbf{F}_k = \frac{\partial f}{\partial \mathbf{x}}\bigg|_{\hat{\mathbf{x}}^{+}}$ &mdash; Linearize at current estimate</li>
+                    <li style="margin-bottom:8px"><strong>Predict covariance:</strong> $\mathbf{P}^{-} = \mathbf{F}_k\mathbf{P}^{+}\mathbf{F}_k^T + \mathbf{Q}$</li>
+                    <li style="margin-bottom:8px"><strong>Update:</strong> Same as standard Kalman filter using the linearized system</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="item-tab-content" id="tab-math">
+            <div class="item-section">
+                <h2>Key Equations</h2>
+                <div class="item-math">
+                    <div class="item-math__label">Nonlinear State Prediction</div>
+                    <p>$$\hat{\mathbf{x}}_{k+1}^{-} = f(\hat{\mathbf{x}}_k^{+}, \mathbf{u}_k)$$</p>
+                </div>
+                <div class="item-math">
+                    <div class="item-math__label">Jacobian (State Transition)</div>
+                    <p>$$\mathbf{F}_k = \frac{\partial f}{\partial \mathbf{x}}\bigg|_{\hat{\mathbf{x}}_k^{+}} \approx \begin{bmatrix}\frac{\partial f_1}{\partial x_1} & \cdots & \frac{\partial f_1}{\partial x_n}\\ \vdots & \ddots & \vdots \\ \frac{\partial f_n}{\partial x_1} & \cdots & \frac{\partial f_n}{\partial x_n}\end{bmatrix}$$</p>
+                </div>
+                <div class="item-math">
+                    <div class="item-math__label">Linearized Covariance Propagation</div>
+                    <p>$$\mathbf{P}_{k+1}^{-} = \mathbf{F}_k \mathbf{P}_k^{+} \mathbf{F}_k^T + \mathbf{Q}$$</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="item-tab-content" id="tab-code">
+            <div class="item-section">
+                <h2>MATLAB Implementation</h2>
+                <div class="item-code">
+                    <div class="item-code__label">MATLAB</div>
+                    <pre><code>%% E05: Extended Kalman Filter (2-Link Arm)
+function xnext = armDynamics(x, dt)
+    q1=x(1); q2=x(2); qd1=x(3); qd2=x(4);
+    g=9.81; L1=1; L2=0.8; m1=1; m2=0.8; d=0.1;
+    qdd1 = (-(m1+m2)*g*L1*sin(q1) - ...
+            m2*g*L2*sin(q1+q2)*0.3 - d*qd1) / ((m1+m2)*L1^2);
+    qdd2 = (-m2*g*L2*sin(q1+q2) - d*qd2) / (m2*L2^2);
+    xnext = x + dt*[qd1; qd2; qdd1; qdd2];
+end
+
+% Numerical Jacobian
+function F = numJacobian(f, x, dt)
+    n = length(x); eps = 1e-5; f0 = f(x,dt);
+    F = zeros(n);
+    for j = 1:n
+        xp = x; xp(j) = xp(j) + eps;
+        F(:,j) = (f(xp,dt) - f0) / eps;
+    end
+end
+
+% EKF loop
+x = [0.8;-0.5;0.5;-0.3]; xhat = zeros(4,1);
+P = eye(4); Q = 0.005*eye(4); R = 0.05*eye(2);
+C = [eye(2) zeros(2)];
+for k = 1:250
+    y = C*x + chol(R)'*randn(2,1);
+    F = numJacobian(@armDynamics, xhat, dt);
+    xhat_m = armDynamics(xhat, dt);
+    P_m = F*P*F' + Q;
+    S = C*P_m*C' + R;
+    K = P_m*C'/S;
+    xhat = xhat_m + K*(y - C*xhat_m);
+    P = (eye(4)-K*C)*P_m;
+    x = armDynamics(x, dt) + chol(Q)'*randn(4,1);
+end</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="item-tab-content" id="tab-references">
+            <div class="item-section">
+                <h2>Key References</h2>
+                <ul>
+                    <li>Smith, G.L., Schmidt, S.F., & McGee, L.A. (1962). Application of Statistical Filter Theory. NASA TR R-135.</li>
+                    <li>Simon, D. (2006). <em>Optimal State Estimation</em>, Ch. 13. Wiley.</li>
+                </ul>
+                <h3>Related Modules</h3>
+                <div class="item-related">
+                    <a href="https://malphons.github.io/se-zoo-opt-linear-filter/items/kalman-filter/" class="item-related__link">&larr; E04: Kalman Filter</a>
+                    <a href="https://malphons.github.io/se-zoo-opt-sensor-fusion/items/sensor-fusion/" class="item-related__link">E06: Sensor Fusion &rarr;</a>
+                    <a href="https://malphons.github.io/se-zoo-adv-particle-filter/items/particle-filter/" class="item-related__link">E09: Particle Filter &rarr;</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/data.js"></script>
+    <script src="../../js/shared-diagram.js"></script>
+    <script src="../../js/shared-animation.js"></script>
+    <script src="../../js/shared-tabs.js"></script>
+    <script>
+    (function () {
+        'use strict';
+        var data = SEZoo.itemData;
+        var viewMode = 'joints';
+        var sim, anim;
+        SEZoo.tabs.init({ themeKey: 'sezoo_theme' });
+
+        /* Robot SVG */
+        var robot = SEZoo.anim.createRobotSvg('#robot-container', {
+            viewBox: '-180 -180 360 360'
+        });
+
+        function initDiag(yDom, yLab) {
+            SEZoo.diagram.destroy();
+            SEZoo.diagram.init('#diagram-container', {
+                width: 800, height: 380,
+                xDomain: [0, data.params.duration], yDomain: yDom,
+                xLabel: 'Time (s)', yLabel: yLab
+            });
+        }
+
+        function renderChart() {
+            if (viewMode === 'joints') {
+                initDiag([-2, 2], 'Joint Angle (rad)');
+                SEZoo.diagram.drawTimeSeries(sim.trueQ1, { color: '#3fb950', width: 2, className: 'se-q1-true' });
+                SEZoo.diagram.drawTimeSeries(sim.estQ1, { color: '#58a6ff', width: 2, className: 'se-q1-est', animate: false });
+                SEZoo.diagram.drawTimeSeries(sim.trueQ2, { color: '#56d364', width: 2, className: 'se-q2-true', animate: false });
+                SEZoo.diagram.drawTimeSeries(sim.estQ2, { color: '#bc8cff', width: 2, className: 'se-q2-est', animate: false });
+            } else if (viewMode === 'error') {
+                initDiag([0, 2], 'Error Norm');
+                SEZoo.diagram.drawTimeSeries(sim.errors, { color: '#f85149', width: 2, className: 'se-err' });
+            } else {
+                initDiag([0, 5], 'tr(P)');
+                SEZoo.diagram.drawTimeSeries(sim.covTraces, { color: '#bc8cff', width: 2, className: 'se-cov' });
+            }
+            document.getElementById('diagram-stats').textContent =
+                'Final error: ' + sim.stats.finalError +
+                '  |  Q = ' + data.params.Q_scale.toFixed(3) +
+                '  R = ' + data.params.R_scale.toFixed(2);
+        }
+
+        function renderRobotFrame(frame) {
+            if (!sim || !robot) return;
+            robot.g.selectAll('*').remove();
+
+            /* Scale physical link lengths (meters) to SVG units */
+            var armScale = 90;
+            var svgL1 = data.params.L1 * armScale;
+            var svgL2 = data.params.L2 * armScale;
+
+            /* True arm (green) */
+            SEZoo.anim.draw2LinkArm(robot.g,
+                sim.armTrue[frame].q1, sim.armTrue[frame].q2,
+                svgL1, svgL2,
+                { color: SEZoo.anim.SE_COLORS.true_state, className: 'robot-arm-true' });
+
+            /* Estimated arm (blue, semi-transparent) */
+            SEZoo.anim.draw2LinkArm(robot.g,
+                sim.armEst[frame].q1, sim.armEst[frame].q2,
+                svgL1, svgL2,
+                { color: SEZoo.anim.SE_COLORS.estimate, opacity: 0.5, className: 'robot-arm-est' });
+
+            /* Time cursor */
+            var t = sim.armTrue[frame].t;
+            var scales = SEZoo.diagram.getScales();
+            var dims = SEZoo.diagram.getDims();
+            var margin = SEZoo.diagram.getMargin();
+            SEZoo.anim.drawTimeCursor(SEZoo.diagram.getSvg(), scales.x, t, dims.height, margin);
+        }
+
+        function regenerate() {
+            sim = data.generate();
+            renderChart();
+            if (anim) anim.reset(sim.trueQ1.length);
+        }
+
+        /* Initialize */
+        sim = data.generate();
+        renderChart();
+
+        anim = new SEZoo.anim.AnimController({
+            totalFrames: sim.trueQ1.length,
+            fps: 30,
+            playBtn: document.getElementById('btn-play'),
+            scrubber: document.getElementById('scrubber'),
+            frameDisplay: document.getElementById('frame-display'),
+            speedSelect: document.getElementById('speed-select'),
+            stepBackBtn: document.getElementById('btn-step-back'),
+            stepFwdBtn: document.getElementById('btn-step-fwd'),
+            onFrame: renderRobotFrame
+        });
+
+        /* View toggles */
+        ['joints','error','cov'].forEach(function (m) {
+            var id = m === 'joints' ? 'btn-joints' : (m === 'error' ? 'btn-error' : 'btn-cov');
+            document.getElementById(id).addEventListener('click', function () {
+                viewMode = m;
+                document.querySelectorAll('.item-diagram__controls .item-diagram__btn').forEach(function(b){if(b.id!=='btn-regenerate')b.classList.remove('item-diagram__btn--active');});
+                this.classList.add('item-diagram__btn--active');
+                renderChart();
+            });
+        });
+        document.getElementById('btn-regenerate').addEventListener('click', regenerate);
+
+        document.querySelector('#slider-Q .item-slider__input').addEventListener('input', function () {
+            data.params.Q_scale = parseFloat(this.value);
+            document.querySelector('#slider-Q .item-slider__value').textContent = data.params.Q_scale.toFixed(3);
+            regenerate();
+        });
+        document.querySelector('#slider-R .item-slider__input').addEventListener('input', function () {
+            data.params.R_scale = parseFloat(this.value);
+            document.querySelector('#slider-R .item-slider__value').textContent = data.params.R_scale.toFixed(2);
+            regenerate();
+        });
+    })();
+    </script>
+</body>
+</html>

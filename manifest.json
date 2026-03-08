@@ -1,0 +1,27 @@
+{
+    "schema_version": "1.0",
+    "repo_id": "se-zoo-opt-nonlinear-filter",
+    "group": "optimal-filtering",
+    "category": "nonlinear-filter",
+    "label": "Nonlinear Kalman",
+    "color_accent": "#db6d28",
+    "items": [
+        {
+            "id": "ekf",
+            "module_id": "E05",
+            "name": "Extended Kalman Filter",
+            "short_description": "Real robots are nonlinear. The EKF handles this through local linearization via Jacobians at the current state estimate.",
+            "group": "optimal-filtering",
+            "category": "nonlinear-filter",
+            "tags": ["EKF", "nonlinear", "jacobian", "linearization", "divergence", "2-link"],
+            "year_introduced": 1960,
+            "key_paper": "Smith et al. (1962)",
+            "complexity": "intermediate",
+            "color_accent": "#db6d28",
+            "robot": "2-Link Arm",
+            "core_concept": "Nonlinear estimation via linearization",
+            "use_cases": ["Nonlinear state estimation", "Robot arm tracking", "Attitude estimation"],
+            "related_items": ["kalman-filter", "sensor-fusion", "particle-filter"]
+        }
+    ]
+}
